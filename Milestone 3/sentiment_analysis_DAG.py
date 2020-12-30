@@ -65,6 +65,28 @@ def average_sentiments_callable(**context):
     return average_canada_sentiment, average_afghanistan_sentiment
 
 
+# the average sentiments calculated are compared with the happiness scores in the dataset
+# canada's happiness score of 7.4 indicates that it is a happy country
+# afghanistan's happiness score of 3.6 indicates that it is a sad country
+# an average sentiment greater than 0 indicates positive (happy) tweets
+# an average sentiment less than 0 indicates negative (sad) tweets
+def compare_sentiments_callable(**context):
+    average_canada_sentiment, average_afghanistan_sentiment = context['task_instance'].xcom_pull(task_ids='average_sentiments')
+    rows = []
+    with open("average_sentiments.csv") as csv_file:
+        rows = list(csv.reader(csv_file))
+        if float(rows[-1][1]) > 0:
+            rows[-1].append("Positive Sentiment, unlike the 3.6 happiness score in the dataset which indicates a sad country")
+        else:
+            rows[-1].append("Negative Sentiment, aligned with the 3.6 happiness score in the dataset which indicates a sad country")
+        if float(rows[-2][1]) > 0:
+            rows[-2].append("Positive Sentiment, aligned with the 7.4 happiness score in the dataset which indicates a happy country")
+        else:
+            rows[-2].append("Negative Sentiment, unlike the 7.4 happiness score in the dataset which indicates a happy country")
+    with open("average_sentiments.csv", "w") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerows(rows)
+
 
 get_tweets_task = PythonOperator(
     task_id='get_tweets',
@@ -86,3 +108,12 @@ average_sentiments_task = PythonOperator(
     python_callable=average_sentiments_callable,
     dag=dag,
 )
+
+compare_sentiments_task = PythonOperator(
+    task_id='compare_sentiments',
+    provide_context=True,
+    python_callable=compare_sentiments_callable,
+    dag=dag,
+)
+
+get_tweets_task >> calculate_sentiments_task >> average_sentiments_task >> compare_sentiments_task
