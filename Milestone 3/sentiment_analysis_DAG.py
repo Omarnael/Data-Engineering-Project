@@ -43,9 +43,46 @@ def get_tweets_callable(**kwargs):
     afghanistan_tweets_text = list(map(lambda tweet: tweet._json["full_text"], afghanistan_tweets))
     return canada_tweets_text, afghanistan_tweets_text
 
+
+# the sentiment of each tweet is calculated using the TextBlob library
+# and each tweet is mapped to its corresponding sentiment
+def calculate_sentiments_callable(**context):
+    canada_tweets_text, afghanistan_tweets_text = context['task_instance'].xcom_pull(task_ids='get_tweets')
+    canada_sentiments = list(map(lambda tweet: TextBlob(tweet).sentiment.polarity, canada_tweets_text))
+    afghanistan_sentiments = list(map(lambda tweet: TextBlob(tweet).sentiment.polarity, afghanistan_tweets_text))
+    return canada_sentiments, afghanistan_sentiments
+
+# the average of the sentiments of the tweets of each country is calculated
+# and the results are stored in a csv file along with their timestamps
+def average_sentiments_callable(**context):
+    canada_sentiments, afghanistan_sentiments = context['task_instance'].xcom_pull(task_ids='calculate_sentiments')
+    average_canada_sentiment = sum(canada_sentiments) / len(canada_sentiments)
+    average_afghanistan_sentiment = sum(afghanistan_sentiments) / len(afghanistan_sentiments)
+    with open("average_sentiments.csv", "a") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(["Canada", average_canada_sentiment, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+        writer.writerow(["Afghanistan", average_afghanistan_sentiment, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    return average_canada_sentiment, average_afghanistan_sentiment
+
+
+
 get_tweets_task = PythonOperator(
     task_id='get_tweets',
     provide_context=True,
     python_callable=get_tweets_callable,
+    dag=dag,
+)
+
+calculate_sentiments_task = PythonOperator(
+    task_id='calculate_sentiments',
+    provide_context=True,
+    python_callable=calculate_sentiments_callable,
+    dag=dag,
+)
+
+average_sentiments_task = PythonOperator(
+    task_id='average_sentiments',
+    provide_context=True,
+    python_callable=average_sentiments_callable,
     dag=dag,
 )
